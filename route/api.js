@@ -1,5 +1,6 @@
 var router = require("express").Router();
 var db = require('../db/db');
+var ObjectId = require("mongodb").ObjectId;
 
 router.post('/signup', (req, res) => {
     let { name, email, password } = req.body;
@@ -18,7 +19,13 @@ router.post('/signup', (req, res) => {
         token: ObjectId().toString()
     }
 
-    db.getCollection("users").insert({ data }).then(resp => res.send({ token: data.token }))
+    db.getCollection("users").findOne({ email }).then((item) => {
+        if (!item) {
+            db.getCollection("users").insertOne({ ...data }).then(resp => res.send({ token: data.token }))
+        } else {
+            return res.send({ success: false, msg: "user alraedy exit" })
+        }
+    })
 })
 
 
@@ -31,8 +38,7 @@ router.post('/login', (req, res) => {
         });
     }
 
-    db.getCollection("users").fineOne({ email }).then(data => {
-
+    db.getCollection("users").findOne({ email }).then((data) => {
         if (!data) {
             return res.send({
                 success: false,
@@ -55,7 +61,7 @@ router.post('/login', (req, res) => {
 })
 
 
-router.post("/userList", (req, res) => {
+router.get("/userList", (req, res) => {
     db.getCollection("users")
         .find()
         .toArray(function (err, docs) {
@@ -73,8 +79,8 @@ router.post("/userList", (req, res) => {
         })
 })
 
-router.post("/updateUser:id", (req, res) => {
-    let { id } = req.params;
+router.post("/updateUser", (req, res) => {
+    let { id } = req.query;
     let { name, email } = req.body;
     let payload = {};
 
@@ -86,37 +92,54 @@ router.post("/updateUser:id", (req, res) => {
         payload.email = email
     }
 
-    db.getCollection('users')
-        .updateOne({ userId: id }, { $set: { payload } })
-        .then(_ => {
-            return res.send({
-                success: true,
-                msg: "data has been updated"
-            })
-        })
-        .catch(error => {
-            console.log(error)
-            return res.send({
-                success: false,
-                msg: "something went wrong"
-            })
-        })
+    db.getCollection("users").findOne({ userId: id }).then((item) => {
+        if (!item) {
+            return res.send({ success: false, msg: "invalid user" })
+        }
 
+        db.getCollection('users')
+            .updateOne({ userId: id }, { $set: { ...payload } })
+            .then(_ => {
+                return res.send({
+                    success: true,
+                    msg: "data has been updated"
+                })
+            })
+            .catch(error => {
+                console.log(error)
+                return res.send({
+                    success: false,
+                    msg: "something went wrong"
+                })
+            })
+
+    })
 });
 
-router.post("/delete:id", (req, res) => {
-    let { id } = req.params;
+router.get("/delete", (req, res) => {
+    let { id } = req.query;
 
-    db.getCollection("users").remove({ userId: id }).then(_ => {
-        return res.send({
-            success: true,
-            msg: "use removed"
+    db.getCollection("users").findOne({ userId: id }).then((item) => {
+        if (!item) {
+            return res.send({ success: false, msg: "invalid user" })
+        }
+
+
+        db.getCollection("users").deleteOne({ userId: id }).then(_ => {
+            return res.send({
+                success: true,
+                msg: "use removed"
+            })
         })
-            .catch(_ => {
+            .catch(err => {
+                console.log(err)
                 return res.send({
                     success: false,
                     msg: "not removed something went wrong"
                 })
             })
+
     })
 });
+
+module.exports = router;
